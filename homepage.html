@@ -1,0 +1,258 @@
+<html>
+  <head>
+    <title>Molecule Viewer</title>
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.13.1/themes/base/jquery-ui.css">
+    <script src="//code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="//code.jquery.com/ui/1.13.1/jquery-ui.min.js"></script>
+    <script>
+      $(function () {
+        $("#tabs").tabs();
+
+        function displaySvg(moleculeName){
+          $.ajax({
+            url: "/getsvg",
+            type: "GET",
+            data: { moleculeName: moleculeName },
+            success: function(response) {
+              $("#tab5").html(response);
+              var formHtml = '<form id="coordForm">';
+              formHtml += '<label for="xCoord">X-coordinate:</label><br>';
+              formHtml += '<input type="number" id="xCoord" name="xCoord"><br>';
+              formHtml += '<label for="yCoord">Y-coordinate:</label><br>';
+              formHtml += '<input type="number" id="yCoord" name="yCoord"><br>';
+              formHtml += '<label for="zCoord">Z-coordinate:</label><br>';
+              formHtml += '<input type="number" id="zCoord" name="zCoord"><br>';
+              formHtml += '<input type="submit" value="Submit">';
+              formHtml += '</form>';
+
+              $("#tab5").append(formHtml);
+
+              $("#coordForm").on("submit", function(event) {
+                event.preventDefault();
+                var xCoord = $("#xCoord").val();
+                var yCoord = $("#yCoord").val();
+                var zCoord = $("#zCoord").val();
+                $.ajax({
+                  url: "/rotate",
+                  type: "POST",
+                  contentType: "application/json",
+                  data: JSON.stringify({
+                    moleculeName: moleculeName,
+                    xCoord: xCoord,
+                    yCoord: yCoord,
+                    zCoord: zCoord
+                  }),
+                  success: function(response) {
+                    displaySvg(moleculeName);
+                  }
+                });
+              });
+            }
+          });
+        }
+
+        function elementButtons(){
+          $.ajax({
+            url: "/getelements",
+            type: "GET",
+            success: function(response) {
+              var elements = JSON.parse(response);
+              var elementsDiv = $("#elements");
+              elementsDiv.empty();
+              for (var element in elements) {
+                var elementContainer = $("<div>").addClass("element-container");
+                var elementName = $("<span>").text(elements[element]);
+                var removeButton = $("<button>").text("Remove").addClass("remove-element").data("element", elements[element]);
+                elementContainer.append(elementName).append(removeButton);
+                elementsDiv.append(elementContainer);
+              }
+              elementsDiv.find("button").on("click", function() {
+                var elementName = $(this).data("element");
+                $.ajax({
+                  url: "/removeelement",
+                  type: "POST",
+                  dataType: "JSON",
+                  contentType: "application/json",
+                  data: JSON.stringify({ elementName: elementName }),
+                  success: function(response) {
+                    alert("Element successfully removed.");
+                    elementButtons();
+                  }, 
+                  error: function() {
+                    alert("Error adding element");
+                  }
+                });
+              });
+            }
+          })
+        }
+
+        $("#tabs").on("tabsactivate", function(event, ui) {
+          if(ui.newPanel.attr("id") == "tab2") {
+            elementButtons();
+          }
+        })
+        
+        $("#add-remove-elements-form").submit(function(event) {
+          event.preventDefault();
+          var form = $(this);
+          var elementNumber = form.find("#element-number").val();
+          var elementCode = form.find("#element-code").val();
+          var elementName = form.find("#element-name").val();
+          var elementColor1 = form.find("#element-color-1").val();
+          var elementColor2 = form.find("#element-color-2").val();
+          var elementColor3 = form.find("#element-color-3").val();
+          var elementRadius = form.find("#element-radius").val();
+          $.ajax({
+            url: "/addelement",
+            type: "POST",
+            dataType: "JSON",
+            contentType: "application/json",
+            data: JSON.stringify({
+              elementNumber: elementNumber,
+              elementCode: elementCode,
+              elementName: elementName,
+              elementColor1: elementColor1,
+              elementColor2: elementColor2,
+              elementColor3: elementColor3,
+              elementRadius: elementRadius
+            }),
+            success: function(response) {
+              alert("Element has successfully been added");
+              elementButtons();
+            },
+            error: function() {
+              alert("Error adding element");
+            }
+          });
+        });
+
+        $("#tabs").on("tabsactivate", function(event, ui) {
+          if (ui.newPanel.attr("id") == "tab4") {
+            $.ajax({
+              url: "/getmolecules",
+              type: "GET",
+              success: function(response) {
+                var molecules = JSON.parse(response);
+                var moleculesDiv = $("#molecules");
+                moleculesDiv.empty();
+                for (var molecule in molecules) {
+                  var atoms = molecules[molecule][0];
+                  var bonds = molecules[molecule][1];
+                  var moleculeButton = $("<button>")
+                    .html("<b>" + molecule + "</b><br/>Atoms: " + atoms + "<br/>Bonds: " + bonds + "<br/><br/>")
+                    .css("display", "block")
+                    .data("molecule", molecule);
+                  moleculesDiv.append(moleculeButton);
+                }
+                moleculesDiv.find("button").on("click", function() {
+                  var moleculeName = $(this).data("molecule");
+                  displaySvg(moleculeName);
+                });
+              }
+            });
+          }
+        });
+
+
+        $('#sdf_form').submit(function(e){
+          e.preventDefault();
+          var form_data = new FormData(this);
+          var molecule_name = $('#molecule_name').val();
+          if (molecule_name != "") {
+            var file_input = document.getElementById("sdf_file");
+            var file = file_input.files[0];
+            form_data.set("filename", new File([file], molecule_name + ".sdf", {type: file.type}));
+            $.ajax({
+              url: '/uploadsuccess',
+              type: 'POST',
+              data: form_data,
+              contentType: false,
+              processData: false,
+              success: function(response){
+                alert('File uploaded successfully.');
+              },
+              error: function() {
+                alert("Error adding molecule.");
+              }
+            });
+          }
+        });
+      });
+    </script>
+  </head>
+  <body>
+    <h1>Molecule Viewer - Select a Menu Option</h1>
+    <div id="tabs">
+      <ul>
+        <li><a href="#tab1">Home</a></li>
+        <li><a href="#tab2">Add/Remove Elements</a></li>
+        <li><a href="#tab3">Upload SDF File</a></li>
+        <li><a href="#tab4">Select From Molecules</a></li>
+        <li><a href="#tab5">Display Molecule</a></li>
+      </ul>
+  
+      <div id="tab1">
+        <h1>Welcome! This is the CIS 2750 Molecule Viewer Website.</h1>
+      </div>
+  
+      <div id="tab2">
+        <h1> Add an Element</h1>
+        <form id="add-remove-elements-form">
+          <label for="element-number">Element Number:</label>
+          <input type="number" id="element-number" name="elementNumber" min="1" max="118" required>
+          <br>
+          <label for="element-code">Element Code:</label>
+          <input type="text" id="element-code" name="elementCode" maxlength="2" required>
+          <br>
+          <label for="element-name">Element Name:</label>
+          <input type="text" id="element-name" name="elementName" required>
+          <br>
+          <label for="element-color">Element Color 1:</label>
+          <input type="color" id="element-color-1" name="elementColor1" value="#000000" required>
+          <br>
+          <label for="element-color">Element Color 2:</label>
+          <input type="color" id="element-color-2" name="elementColor2" value="#FF0000" required>
+          <br>
+          <label for="element-color">Element Color 3:</label>
+          <input type="color" id="element-color-3" name="elementColor3" value="#FF0000" required>
+          <br>
+          <label for="element-color">Element Radius:</label>
+          <input type="number" id="element-radius" name="elementRadius" step="1" min="1" max="100" required>
+          <br><br>
+          <button type="submit">Add Element</button>
+        </form>
+  
+        <h1>Remove an Element</h1>
+        <div id="elements"></div>
+  
+      </div>  
+
+      <div id="tab3">
+        <h1> File Upload </h1>
+        <form id="sdf_form" enctype="multipart/form-data" accept=".sdf">
+          <p>
+            <label for="molecule_name">Molecule Name:</label>
+            <input type="text" id="molecule_name" name="molecule_name"/>
+          </p>
+          <p>
+            <label for="sdf_file">Select an SDF file:</label>
+            <input type="file" id="sdf_file" name="filename"/>
+          </p>
+          <p>
+            <input type="submit" value="Upload"/>
+          </p>
+        </form>
+      </div>
+
+      <div id="tab4">
+        <h1>Select From Molecules</h1>
+        <div id="molecules"></div>
+      </div>
+
+      <div id="tab5">
+        <h1>Display a Molecule</h1>
+      </div>
+    </div>
+  </body>
+</html>
